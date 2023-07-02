@@ -5,7 +5,7 @@ use crate::{
     state::{ExtensionCache, RequestCache, ResponseCache},
 };
 use axum::{
-    body::Body,
+    body::{Body, HttpBody},
     extract::{Extension, Path},
     http::{Request, StatusCode},
     response::Response,
@@ -172,12 +172,20 @@ async fn respond_to_next_invocation(
     response_status: StatusCode,
 ) -> Result<Response<Body>, ServerError> {
     if let Some(resp_tx) = cache.pop(req_id).await {
-        let (_, body) = req.into_parts();
+        let (_, mut body) = req.into_parts();
+
+        let (mut tx, rx) = Body::channel();
+
+        tokio::spawn(async move {
+            while let Some(Ok(chunk)) = body.data().await {
+                tx.send_data(chunk.into()).await.unwrap();
+            }
+        });
 
         let resp = Response::builder()
             .status(response_status)
             .header(LAMBDA_RUNTIME_AWS_REQUEST_ID, req_id)
-            .body(body)
+            .body(rx)
             .map_err(ServerError::ResponseBuild)?;
 
         resp_tx
