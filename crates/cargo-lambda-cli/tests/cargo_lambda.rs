@@ -51,9 +51,7 @@ fn test_build_basic_zip_function() {
     assert!(
         zip.by_name("bootstrap").is_ok(),
         "bootstrap is not in the zip archive. Files in zip: {:?}",
-        zip.file_names()
-            .collect::<Vec<&str>>()
-            .join(", ")
+        zip.file_names().collect::<Vec<&str>>().join(", ")
     );
 }
 
@@ -234,9 +232,7 @@ fn test_build_basic_zip_extension() {
     assert!(
         zip.by_name("extensions/test-basic-extension").is_ok(),
         "test-basic-extension is not in the zip archive. Files in zip: {:?}",
-        zip.file_names()
-            .collect::<Vec<&str>>()
-            .join(", ")
+        zip.file_names().collect::<Vec<&str>>().join(", ")
     );
 }
 
@@ -264,8 +260,6 @@ fn test_build_internal_zip_extension() {
     assert!(
         zip.by_name("test-internal-extension").is_ok(),
         "test-internal-extension is not in the zip archive. Files in zip: {:?}",
-        zip.file_names()
-            .collect::<Vec<&str>>()
-            .join(", ")
+        zip.file_names().collect::<Vec<&str>>().join(", ")
     );
 }
