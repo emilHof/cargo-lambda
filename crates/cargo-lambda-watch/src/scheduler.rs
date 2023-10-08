@@ -135,7 +135,7 @@ pub(crate) fn cargo_command(
     name: &str,
     cargo_options: &CargoOptions,
 ) -> watchexec::command::Command {
-    let mut args = vec!["run".into()];
+    let mut args = vec!["run".into(), "--color".into(), cargo_options.color.clone()];
     if let Some(features) = cargo_options.features.as_deref() {
         args.push("--features".into());
         args.push(features.into());
