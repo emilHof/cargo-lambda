@@ -2,7 +2,7 @@ use crate::{
     requests::Action,
     state::RuntimeState,
     watcher::{FunctionData, WatcherConfig},
-    CargoOptions,
+    CargoOptions, ServerError,
 };
 use cargo_lambda_invoke::DEFAULT_PACKAGE_FUNCTION;
 use std::sync::{Arc, Mutex};
@@ -81,8 +81,18 @@ async fn start_scheduler(
                                 if let Some(name) = start_function_name {
                                     let runtime_api = format!("{}/{}", &state.server_addr, &name);
                                     info!(function = name, "starting new lambda");
-                                    let function_data =
-                                        function_data(name, runtime_api, cargo_options.clone());
+                                    let function_data = match function_data(
+                                        name,
+                                        runtime_api,
+                                        cargo_options.clone()
+                                    ) {
+                                        Err(err) => {
+                                            error!(error = ?err, "failed to initialize function with data");
+                                            continue;
+                                        }
+                                        Ok(data) => data
+                                    };
+
                                     // Check for errors sending function or event.
                                     if let Err(err) =
                                         function_tx.send(function_data.clone()).await
@@ -111,20 +121,24 @@ async fn start_scheduler(
     };
 }
 
-fn function_data(name: String, runtime_api: String, cargo_options: CargoOptions) -> FunctionData {
-    let cmd = cargo_command(&name, &cargo_options);
+fn function_data(
+    name: String,
+    runtime_api: String,
+    cargo_options: CargoOptions,
+) -> Result<FunctionData, ServerError> {
+    let cmd = cargo_command(&name, &cargo_options)?;
     let bin_name = if is_valid_bin_name(&name) {
         Some(name.clone())
     } else {
         None
     };
 
-    FunctionData {
+    Ok(FunctionData {
         cmd,
         name,
         runtime_api,
         bin_name,
-    }
+    })
 }
 
 fn is_valid_bin_name(name: &str) -> bool {
@@ -134,8 +148,18 @@ fn is_valid_bin_name(name: &str) -> bool {
 pub(crate) fn cargo_command(
     name: &str,
     cargo_options: &CargoOptions,
-) -> watchexec::command::Command {
-    let mut args = vec!["run".into(), "--color".into(), cargo_options.color.clone()];
+) -> Result<watchexec::command::Command, ServerError> {
+    let mp = cargo_options
+        .manifest_path
+        .to_str()
+        .ok_or_else(|| ServerError::InvalidManifest(cargo_options.manifest_path.clone()))?;
+    let mut args = vec![
+        "run".into(),
+        "--manifest-path".into(),
+        mp.to_string(),
+        "--color".into(),
+        cargo_options.color.clone(),
+    ];
     if let Some(features) = cargo_options.features.as_deref() {
         args.push("--features".into());
         args.push(features.into());
@@ -150,8 +174,8 @@ pub(crate) fn cargo_command(
         args.push(name.into());
     }
 
-    watchexec::command::Command::from(Program::Exec {
+    Ok(watchexec::command::Command::from(Program::Exec {
         prog: "cargo".into(),
         args,
-    })
+    }))
 }
